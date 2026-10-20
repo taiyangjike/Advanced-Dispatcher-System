@@ -9,72 +9,72 @@ namespace AdvancedDispatcherSystem.Host;
 
 public sealed class UserAccount
 {
-    public string name, role, salt, hash;
+ public string name, role, salt, hash;
 }
 public sealed class AuthSession
 {
-    public string name, role;
-    public long expires;
-    // These fields are Host-only lifecycle state. A browser may reconnect with
-    // the same cookie during the short disconnect grace period, while a second
-    // login for the account is rejected until that lease expires.
-    internal int connections;
-    internal long disconnectedAt;
-    internal readonly CancellationTokenSource revoked = new();
+ public string name, role;
+ public long expires;
+ // These fields are Host-only lifecycle state. A browser may reconnect with
+ // the same cookie during the short disconnect grace period, while a second
+ // login for the account is rejected until that lease expires.
+ internal int connections;
+ internal long disconnectedAt;
+ internal readonly CancellationTokenSource revoked = new();
 }
 public sealed class Accounts
 {
-    // Session expiry is an idle timeout. Every authenticated user action
-    // renews this bounded lease; background health polling does not.
-    public const long SessionLifetimeMs = 15 * 60 * 1000;
-    // A browser may suspend a tab or briefly lose a VPN/Wi-Fi route. Keep the
-    // single-account lease recoverable for a bounded 15 minutes, while still
-    // releasing it when the client really stays away.
-    public const long DisconnectGraceMs = 15 * 60 * 1000;
-    private readonly string path;
-    private readonly object sync = new();
-    private List<UserAccount> users;
-    private readonly ConcurrentDictionary<string, AuthSession> sessions = new();
-    private readonly SemaphoreSlim hashing = new(2, 2);
-    private readonly string bootstrap;
-    private readonly long disconnectGraceMs;
-    private readonly Dictionary<string,long> usedOwnerCodes=new();
-    private readonly long ownerCodesSince=Protocol.Now;
-    public bool RecoveryRequired { get; private set; }
-    public Accounts(string directory, string bootstrap, long disconnectGraceMs = DisconnectGraceMs)
+ // Session expiry is an idle timeout. Every authenticated user action
+ // renews this bounded lease; background health polling does not.
+ public const long SessionLifetimeMs = 24 * 15 * 60 * 1000;
+ // A browser may suspend a tab or briefly lose a VPN/Wi-Fi route. Keep the
+ // single-account lease recoverable for a bounded 15 minutes, while still
+ // releasing it when the client really stays away.
+ public const long DisconnectGraceMs = 24 * 15 * 60 * 1000;
+ private readonly string path;
+ private readonly object sync = new();
+ private List<UserAccount> users;
+ private readonly ConcurrentDictionary<string, AuthSession> sessions = new();
+ private readonly SemaphoreSlim hashing = new(2, 2);
+ private readonly string bootstrap;
+ private readonly long disconnectGraceMs;
+ private readonly Dictionary<string,long> usedOwnerCodes=new();
+ private readonly long ownerCodesSince=Protocol.Now;
+ public bool RecoveryRequired { get; private set; }
+ public Accounts(string directory, string bootstrap, long disconnectGraceMs = DisconnectGraceMs)
     {
         Directory.CreateDirectory(directory); path = Path.Combine(directory, "accounts.json"); this.bootstrap = bootstrap;
-        this.disconnectGraceMs = Math.Max(1, disconnectGraceMs);
-        if (OperatingSystem.IsWindows())
+ this.disconnectGraceMs = Math.Max(1, disconnectGraceMs);
+ if (OperatingSystem.IsWindows())
         {
-            var security = new DirectorySecurity(); security.SetAccessRuleProtection(true, false);
+ var security = new DirectorySecurity(); security.SetAccessRuleProtection(true, false);
             security.AddAccessRule(new FileSystemAccessRule(WindowsIdentity.GetCurrent().User, FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, PropagationFlags.None, AccessControlType.Allow));
-            new DirectoryInfo(directory).SetAccessControl(security);
+ new DirectoryInfo(directory).SetAccessControl(security);
         }
-        else
+ else
         {
-            // Portable hosts keep password hashes and private TLS keys in this
-            // directory too. Do not inherit a world-readable process umask.
+ // Portable hosts keep password hashes and private TLS keys in this
+ // directory too. Do not inherit a world-readable process umask.
             File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
         users = new();
-        if (File.Exists(path)) {
-            try {
-                if (new FileInfo(path).Length > 1024 * 1024) throw new InvalidDataException("ACCOUNTS_SIZE");
-                var loaded = Json.Read<List<UserAccount>>(File.ReadAllBytes(path));
-                if (loaded == null || loaded.Count > 100 || loaded.Any(u => !ValidStoredAccount(u)) || loaded.Select(u => u.name).Distinct(StringComparer.Ordinal).Count() != loaded.Count)
-                    throw new InvalidDataException("ACCOUNTS_SCHEMA");
+ if (File.Exists(path)) {
+ try {
+ if (new FileInfo(path).Length > 1024 * 1024) throw new InvalidDataException("ACCOUNTS_SIZE");
+ var loaded = Json.Read<List<UserAccount>>(File.ReadAllBytes(path));
+ if (loaded == null || loaded.Count > 100 || loaded.Any(u => !ValidStoredAccount(u)) || loaded.Select(u => u.name).Distinct(StringComparer.Ordinal).Count() != loaded.Count)
+ throw new InvalidDataException("ACCOUNTS_SCHEMA");
                 users = loaded;
             }
-            catch (Exception e) when (e is JsonException || e is InvalidDataException) {
-                // Preserve the exact damaged file; do not generate a password or silently
-                // overwrite it. Only the existing local UMM bootstrap can repair accounts.
+ catch (Exception e) when (e is JsonException || e is InvalidDataException) {
+ // Preserve the exact damaged file; do not generate a password or silently
+ // overwrite it. Only the existing local UMM bootstrap can repair accounts.
                 File.Copy(path, path + ".invalid-" + Guid.NewGuid().ToString("N"));
                 RecoveryRequired = true;
                 Console.Error.WriteLine("ACCOUNTS_RECOVERY_REQUIRED " + e.GetType().Name);
             }
         }
-        if (users.Count == 0 && !RecoveryRequired && !File.Exists(path))
+ if (users.Count == 0 && !RecoveryRequired && !File.Exists(path))
         {
             var password = Convert.ToHexString(RandomNumberGenerator.GetBytes(12));
             users.Add(Make("admin", "dispatcher", password)); Save();

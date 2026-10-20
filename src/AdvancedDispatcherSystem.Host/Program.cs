@@ -14,7 +14,7 @@ string Option(string key, string fallback) => argsMap.TryGetValue(key, out var v
 int port = int.Parse(Option("--port", "7246"));
 if (port < 1024 || port > 65535) throw new ArgumentException("INVALID_PORT");
 bool remoteAccess = Option("--remote-access", "true") == "true";
-bool https = remoteAccess;
+bool https = false;
 string secret = Environment.GetEnvironmentVariable("ADS_IPC_TOKEN");
 bool fixture = Option("--fixture", "false") == "true";
 if (string.IsNullOrEmpty(secret) || secret.Length < 32) throw new ArgumentException("IPC_SECRET_REQUIRED");
@@ -39,15 +39,15 @@ builder.WebHost.ConfigureKestrel(o =>
     o.Limits.MaxRequestBodySize = Protocol.MaxCommandBytes;
     o.Limits.MaxConcurrentConnections = 100; o.Limits.MaxConcurrentUpgradedConnections = 64; // Hub admits 50 peers; leave room for closing sockets.
     o.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(10);
-    void ConfigureListener(Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions listen)
+ void ConfigureListener(Microsoft.AspNetCore.Server.Kestrel.Core.ListenOptions listen)
     {
-        if (!https) return;
+ if (!https) return;
         listen.UseHttps(certificate.Server);
     }
-    if(remoteAccess) o.ListenAnyIP(port,ConfigureListener);
-    else {
+ if(remoteAccess) o.ListenAnyIP(port,ConfigureListener);
+ else {
         o.Listen(IPAddress.Loopback,port,ConfigureListener);
-        if(System.Net.Sockets.Socket.OSSupportsIPv6)o.Listen(IPAddress.IPv6Loopback,port,ConfigureListener);
+ if(System.Net.Sockets.Socket.OSSupportsIPv6)o.Listen(IPAddress.IPv6Loopback,port,ConfigureListener);
     }
 });
 var hub = new StateHub(configDirectory); var rates = new RateGate();
@@ -58,18 +58,18 @@ var app = builder.Build();
 app.Use(async (ctx, next) =>
 {
     string requestHost=ctx.Request.Host.Host;
-    if(requestHost.StartsWith('[')&&requestHost.EndsWith(']'))requestHost=requestHost[1..^1];
-    if (!allowedHosts.Contains(requestHost) || ctx.Request.Host.Port != port) { ctx.Response.StatusCode = 400; return; }
+ if(requestHost.StartsWith('[')&&requestHost.EndsWith(']'))requestHost=requestHost[1..^1];
+ if (!allowedHosts.Contains(requestHost) || ctx.Request.Host.Port != port) { ctx.Response.StatusCode = 400; return; }
     string origin = ctx.Request.Headers.Origin;
     string expected = (https ? "https" : "http") + "://" + ctx.Request.Host;
-    if ((!string.IsNullOrEmpty(origin) && !string.Equals(origin, expected, StringComparison.OrdinalIgnoreCase)) || (ctx.Request.Method != "GET" && string.IsNullOrEmpty(origin))) { ctx.Response.StatusCode = 403; return; }
+ if ((!string.IsNullOrEmpty(origin) && !string.Equals(origin, expected, StringComparison.OrdinalIgnoreCase)) || (ctx.Request.Method != "GET" && string.IsNullOrEmpty(origin))) { ctx.Response.StatusCode = 403; return; }
     ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
     ctx.Response.Headers["Referrer-Policy"] = "no-referrer";
     ctx.Response.Headers["Content-Security-Policy"] = "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
-    if (ctx.Request.Path.StartsWithSegments("/api")) ctx.Response.Headers.CacheControl = "no-store";
-    try { await next(); }
-    catch (RouteSearchLimitException) { if (!ctx.Response.HasStarted) {ctx.Response.StatusCode=422;await ctx.Response.WriteAsJsonAsync(new {code="ROUTE_SEARCH_LIMIT"});} }
-    catch (Exception e) when (e is JsonException || e is ArgumentException || e is BadHttpRequestException) { if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 400; }
+ if (ctx.Request.Path.StartsWithSegments("/api")) ctx.Response.Headers.CacheControl = "no-store";
+ try { await next(); }
+ catch (RouteSearchLimitException) { if (!ctx.Response.HasStarted) {ctx.Response.StatusCode=422;await ctx.Response.WriteAsJsonAsync(new {code="ROUTE_SEARCH_LIMIT"});} }
+ catch (Exception e) when (e is JsonException || e is ArgumentException || e is BadHttpRequestException) { if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 400; }
 });
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(15), KeepAliveTimeout = TimeSpan.FromSeconds(15) });
 app.UseDefaultFiles(); app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = c => c.Context.Response.Headers.CacheControl = "no-cache" });
