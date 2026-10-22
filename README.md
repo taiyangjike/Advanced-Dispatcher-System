@@ -4,9 +4,6 @@ https://ko-fi.com/7vlad7##
 ## 🚨 Emergency Hotfix / 紧急热修
 
 **English**
-This is an emergency hotfix release (v1.0.2-hotfix.1) based on the original Advanced Dispatcher System. 
-- **Critical Fixes**: Force-disabled HTTPS (`bool https = false;`) to prevent crashes and `ERR_SSL_PROTOCOL_ERROR` on Linux/Windows. Fixed project configuration errors (Core.csproj and Host.csproj) so the source code can now compile directly out of the box (`dotnet build`).
-- **Known Issues & Workaround**: The "Open dispatcher" button in-game forces `https://`, which causes a connection error. **Workaround**: Please manually open `http://127.0.0.1:7246` in your browser.
 - **Security Warning**: Direct port forwarding to the public internet is NOT recommended. Please use a reverse proxy (e.g., Nginx/Caddy) or VPN (e.g., WireGuard/ZeroTier) to protect your server.
 - **Credits**: Original author: 7Vlad7. Community hotfix maintainer.
 - **Support**: This hotfix is provided for free by the community. If you find it useful, please consider supporting the original author: https://ko-fi.com/7vlad7
@@ -16,8 +13,6 @@ This is an emergency hotfix release (v1.0.2-hotfix.1) based on the original Adva
 ## 🚨 紧急热修
 
 这是基于原版 Advanced Dispatcher System 的紧急热修版本（v1.0.2-hotfix.1）。
-- **关键修复**：强制禁用了 HTTPS（`bool https = false;`），解决了 Linux/Windows 下的崩溃及 `ERR_SSL_PROTOCOL_ERROR` 报错。修复了项目配置文件错误（Core.csproj 和 Host.csproj），现在源码拉取后即可直接通过 `dotnet build` 编译。
-- **已知问题与规避方案**：模组内的“打开调度台”按钮逻辑存在问题（强制跳转 https）。**规避方案**：请直接在浏览器中手动输入 `http://127.0.0.1:7246` 访问。
 - **安全警告**：强烈不建议直接将端口映射到公网。请使用反向代理（如 Nginx/Caddy）或 VPN（如 WireGuard/ZeroTier）来保护你的服务安全。
 - **署名**：原作者：7Vlad7。社区热修维护版。
 - **赞助说明**：本热修版由社区免费提供。如果你觉得有用，请考虑赞助原作者以支持后续开发：https://ko-fi.com/7vlad7
